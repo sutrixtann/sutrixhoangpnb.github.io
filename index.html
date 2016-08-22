@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<head>
+	<style>
+		
+		
+		div#abc{
+			position: absolute;
+			width: 100px;
+			height: 100px;
+			background-color: red;
+			top: 100px;
+			left: 400px;
+		}
+	</style>
+</head>
+<html>
+<body>
+<div style="text-align:center">
+  <button onclick="playPause()">Play/Pause</button>
+  <button onclick="makeBig()">Big</button>
+  <button onclick="makeSmall()">Small</button>
+  <button onclick="makeNormal()">Normal</button>
+  <br><br>
+  <video id="video1" width="420">
+    <source src="http://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+    <source src="http://www.w3schools.com/html/mov_bbb.ogg" type="video/ogg">
+    Your browser does not support HTML5 video.
+  </video>
+</div>
+<div id="abc"></div>
+<script>
+var myVideo = document.getElementById("video1");
+
+function playPause() {
+    if (myVideo.paused)
+        myVideo.play();
+    else
+        myVideo.pause();
+}
+
+function makeBig() {
+    myVideo.width = 560;
+}
+
+function makeSmall() {
+    myVideo.width = 320;
+}
+
+function makeNormal() {
+    myVideo.width = 420;
+}
+
+
+
+  
+  init();
+
+  createVolumeAnalyzer((volume) => {
+  	alert(2);
+    if (volume > 1) {
+    	alert(1);
+    }
+  });
+
+/**
+ * Mic Volume Analyzer
+ * @module utilities/mic-volume-analyzer
+ */
+
+/**
+ * Creates an audio meter
+ *
+ * Credits to https://webaudiodemos.appspot.com/volume-meter/index.html
+ *
+ * @param {AudioContext} audioContext The audio context to connect to
+ * @param {Number} clipLevel Decimal from 0 to 1 specifying the clipping percentage
+ * @param {Number} averaging Decimal from o to 1 specifying the amount of averaging to perform
+ * @param {Number} clipLag Milliseonds specfyig the latency between mic input and actual updates
+ *
+ * @return {object}
+ */
+function createAudioMeter(audioContext, clipLevel, averaging, clipLag) {
+  function onAudioProcess(event) {
+    const buffer = event.inputBuffer.getChannelData(0);
+    let sum = 0;
+
+    // Do a root-mean-square on the samples: sum up the squares
+    buffer.forEach((x) => {
+      if (Math.abs(x) >= this.clipLevel) {
+        this.clipping = true;
+        this.lastClip = window.performance.now();
+      }
+
+      sum += x * x;
+    });
+
+    // Take square root of the sum
+    const rms = Math.sqrt(sum / buffer.length);
+
+    // Smooth volume so that we get fast attack/slow release behavior
+    this.volume = Math.max(rms, this.volume * this.averaging);
+  }
+
+  const processor = audioContext.createScriptProcessor(512);
+  processor.onaudioprocess = onAudioProcess;
+  processor.clipping = false;
+  processor.lastClip = 0;
+  processor.volume = 0;
+  processor.clipLevel = clipLevel || 0.98;
+  processor.averaging = averaging || 0.95;
+  processor.clipLag = clipLag || 750;
+
+  // Fix issueses with Chrome bug
+  processor.connect(audioContext.destination);
+
+  processor.checkClipping = () => {
+    if (!this.clipping) {
+      return false;
+    }
+
+    if ((this.lastClip + this.clipLag) < window.performance.now()) {
+      this.clipping = false;
+    }
+
+    return this.clipping;
+  };
+
+  processor.shutdown = () => {
+    this.disconnect();
+    this.onaudioprocess = null;
+  };
+
+  return processor;
+}
+
+/**
+ * Initializes the AudioContext and getUserMedia properties
+ */
+function init() {
+  // Re-map prefixed properties if they exist
+  if (!window.AudioContext) {
+    window.AudioContext = window.webkitAudioContext || null;
+  }
+
+  if (!navigator.getUserMedia) {
+    if (navigator.webkitGetUserMedia) {
+      navigator.getUserMedia = navigator.webkitGetUserMedia;
+    }
+    else if (navigator.mozGetUserMedia) {
+      navigator.getUserMedia = navigator.mozGetUserMedia;
+    }
+  }
+
+  // Drop unsupported browsers
+  if (!window.AudioContext || !navigator.getUserMedia) {
+    throw new Error('Your web browser does not support recording of mic input.');
+  }
+}
+
+/**
+ * Creates a volume analyzer which triggers a callback function for mic input
+ */
+let animationFrame = null;
+function createVolumeAnalyzer(callback) {
+  // Initialize audio meter
+  let audioMeter = null;
+  function callbackWrapper() {
+    const normalizedVolume = audioMeter.volume * 100;
+
+    callback(normalizedVolume);
+
+    // Keep calling the callback function
+    animationFrame = window.requestAnimationFrame(callbackWrapper);
+  }
+
+  navigator.getUserMedia(
+    {
+      audio: {
+        mandatory: {
+          googEchoCancellation: 'false',
+          googAutoGainControl: 'false',
+          googNoiseSuppression: 'false',
+          googHighpassFilter: 'false'
+        },
+        optional: []
+      }
+    },
+    (stream) => {
+      const audioContext = new AudioContext();
+      const microphone = audioContext.createMediaStreamSource(stream);
+
+      // Create a new volume meter and connect it.
+      audioMeter = createAudioMeter(audioContext);
+      microphone.connect(audioMeter);
+
+      // Call callback (through wrapper)
+      callbackWrapper();
+    },
+    (e) => {
+    	alert(e);
+      throw new Error(e);
+    }
+  );
+}
+
+/**
+ * cancel requestAnimationFrame loop
+ */
+function stopMicAnalyzer() {
+  // window.console.log('animationFrame:', animationFrame);
+  if (animationFrame !== null) {
+    window.cancelAnimationFrame(animationFrame);
+  }
+}
+
+</script>
+
+<p>Video courtesy of <a href="http://www.bigbuckbunny.org/" target="_blank">Big Buck Bunny</a>.</p>
+</body>
+</html>
+
